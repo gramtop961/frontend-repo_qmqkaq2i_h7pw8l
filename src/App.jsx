@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react'
-import { Clock, Upload, CalendarDays, Bell, Monitor, FileDown } from 'lucide-react'
+import React, { useEffect, useMemo, useState } from 'react'
+import { Clock, Upload, CalendarDays, Bell, Monitor } from 'lucide-react'
 
 function Card({ title, children, icon: Icon, accent = 'emerald' }) {
   const color = useMemo(() => ({
@@ -10,7 +10,7 @@ function Card({ title, children, icon: Icon, accent = 'emerald' }) {
   }[accent] || 'from-emerald-500/10 to-emerald-500/0 border-emerald-200'), [accent])
 
   return (
-    <div className={`rounded-2xl border ${color} bg-white p-6 relative overflow-hidden`}> 
+    <div className={`rounded-2xl border ${color} bg-white p-6 relative overflow-hidden`}>
       <div className={`absolute inset-0 bg-gradient-to-br ${color} pointer-events-none`} />
       <div className="relative z-10">
         <div className="flex items-center gap-3">
@@ -33,15 +33,186 @@ function FullscreenTip() {
   )
 }
 
+function LiveClock() {
+  const [now, setNow] = useState(new Date())
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(t)
+  }, [])
+  const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  const dateStr = now.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  return (
+    <div className="flex flex-col items-center justify-center">
+      <div className="text-6xl md:text-7xl font-bold tracking-tight bg-gradient-to-br from-emerald-300 to-sky-300 bg-clip-text text-transparent">{time}</div>
+      <div className="mt-2 text-white/70 text-lg md:text-xl">{dateStr}</div>
+    </div>
+  )
+}
+
+function TimesGrid({ data }) {
+  const rows = [
+    { k: 'fajr', label: 'Fajr', jamaat: 'fajr_jamaat' },
+    { k: 'dhuhr', label: 'Dhuhr', jamaat: 'dhuhr_jamaat' },
+    { k: 'asr', label: 'Asr', jamaat: 'asr_jamaat' },
+    { k: 'maghrib', label: 'Maghrib', jamaat: 'maghrib_jamaat' },
+    { k: 'isha', label: 'Isha', jamaat: 'isha_jamaat' },
+  ]
+  return (
+    <div className="grid grid-cols-3 gap-2 text-lg">
+      <div className="text-white/60">Prayer</div>
+      <div className="text-white/60">Adhan</div>
+      <div className="text-white/60">Jamaat</div>
+      {rows.map(r => (
+        <React.Fragment key={r.k}>
+          <div className="py-2 font-medium">{r.label}</div>
+          <div className="py-2 text-emerald-300">{data?.[r.k] || '--:--'}</div>
+          <div className="py-2 text-sky-300">{data?.[r.jamaat] || '--:--'}</div>
+        </React.Fragment>
+      ))}
+    </div>
+  )
+}
+
+function Ticker({ items }) {
+  const content = (items?.length ? items : ['Welcome to the Masjid Display', 'Set announcements in the manager to see them here']).join(' • ')
+  return (
+    <div className="overflow-hidden rounded-xl border border-white/10 bg-black/30">
+      <div className="whitespace-nowrap animate-[marquee_18s_linear_infinite] py-3 px-4 text-sm md:text-base">
+        <span className="text-emerald-300">Announcements:</span> <span className="text-white/80">{content}</span>
+      </div>
+      <style>{`@keyframes marquee { 0%{ transform: translateX(100%);} 100%{ transform: translateX(-100%);} }`}</style>
+    </div>
+  )
+}
+
+function AssetCarousel({ items }) {
+  const [idx, setIdx] = useState(0)
+  const len = items?.length || 0
+  useEffect(() => {
+    if (!len) return
+    const t = setInterval(() => setIdx(i => (i + 1) % len), 6000)
+    return () => clearInterval(t)
+  }, [len])
+  if (!len) {
+    return (
+      <div className="aspect-video w-full rounded-xl border border-white/10 bg-gradient-to-br from-emerald-900/40 to-sky-900/40 grid place-items-center">
+        <div className="text-white/70 text-sm">Uploaded images and PDFs will rotate here</div>
+      </div>
+    )
+  }
+  const current = items[idx]
+  const url = current.url
+  const isImage = current.content_type?.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(url || '')
+  const isPDF = current.content_type === 'application/pdf' || /\.pdf$/i.test(url || '')
+  return (
+    <div className="aspect-video w-full overflow-hidden rounded-xl border border-white/10 bg-black/50">
+      {isImage ? (
+        <img src={url} alt="slide" className="h-full w-full object-contain" />
+      ) : isPDF ? (
+        <iframe src={url} title="PDF" className="h-full w-full" />
+      ) : (
+        <div className="h-full w-full grid place-items-center">
+          <a href={url} target="_blank" rel="noreferrer" className="text-sky-300 underline">Open Document</a>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DisplayBoard({ backend, refreshKey }) {
+  const [times, setTimes] = useState(null)
+  const [announcements, setAnnouncements] = useState([])
+  const [assets, setAssets] = useState([])
+
+  const safeFetch = async (url) => {
+    const controller = new AbortController()
+    const id = setTimeout(() => controller.abort(), 4000)
+    try {
+      const res = await fetch(url, { signal: controller.signal })
+      if (!res.ok) throw new Error('bad status')
+      return await res.json()
+    } finally {
+      clearTimeout(id)
+    }
+  }
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const t = await safeFetch(`${backend}/api/salah/today`)
+        setTimes(t)
+      } catch {}
+      try {
+        const a = await safeFetch(`${backend}/api/announcements`)
+        setAnnouncements(Array.isArray(a) ? a.map(x => x.message).filter(Boolean) : [])
+      } catch {}
+      try {
+        const as = await safeFetch(`${backend}/api/assets`)
+        const normalized = Array.isArray(as) ? as.map(x => ({
+          url: `${backend}${x.path}`,
+          content_type: x.content_type || '',
+        })) : []
+        setAssets(normalized)
+      } catch {
+        setAssets([])
+      }
+    }
+    load()
+    const interval = setInterval(load, 60_000)
+    return () => clearInterval(interval)
+  }, [backend, refreshKey])
+
+  const fallbackTimes = {
+    fajr: '06:15', fajr_jamaat: '06:30', sunrise: '07:45',
+    dhuhr: '12:30', dhuhr_jamaat: '13:30',
+    asr: '15:45', asr_jamaat: '16:15',
+    maghrib: '17:20', maghrib_jamaat: '17:25',
+    isha: '19:30', isha_jamaat: '20:00',
+  }
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="flex flex-col gap-6">
+          <LiveClock />
+          <div className="rounded-xl border border-white/10 bg-black/30 p-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-semibold">Today’s Times</h3>
+              <span className="text-xs text-white/50">Auto-refreshing</span>
+            </div>
+            <div className="mt-4">
+              <TimesGrid data={times || fallbackTimes} />
+              {(times?.sunrise || fallbackTimes.sunrise) && (
+                <div className="mt-3 text-sm text-white/60">Sunrise: <span className="text-amber-300">{times?.sunrise || fallbackTimes.sunrise}</span></div>
+              )}
+            </div>
+          </div>
+          <Ticker items={announcements} />
+        </div>
+        <div className="flex flex-col gap-6">
+          <AssetCarousel items={assets} />
+          <div className="rounded-xl border border-white/10 bg-gradient-to-br from-emerald-900/30 to-sky-900/30 p-4">
+            <p className="text-white/70 text-sm">Uploaded image/PDF rotation pulls from your backend uploads. If a PDF won’t preview, it uses a built-in inline viewer or shows an open link.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function App() {
   const backend = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
+  const [refreshKey, setRefreshKey] = useState(0)
 
   const upload = async (file) => {
     const form = new FormData()
     form.append('file', file)
     const res = await fetch(`${backend}/api/upload`, { method: 'POST', body: form })
     if (!res.ok) throw new Error('Upload failed')
-    return res.json()
+    const data = await res.json()
+    // Trigger immediate refresh of the display board after successful upload
+    setRefreshKey(k => k + 1)
+    return data
   }
 
   return (
@@ -95,7 +266,7 @@ function App() {
         <section id="manage" className="py-16 bg-[#0b1220]">
           <div className="mx-auto max-w-6xl px-4">
             <h2 className="text-2xl font-semibold">Manage Timings & Files</h2>
-            <p className="text-white/70 mt-2">We’ll add forms next to edit today’s times, set jamaat, and upload files. For now, you can test uploads below.</p>
+            <p className="text-white/70 mt-2">Upload a file and it will appear in the display rotation below.</p>
 
             <div className="mt-6 grid gap-6 md:grid-cols-2">
               <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
@@ -117,7 +288,7 @@ function App() {
                     }
                   }}
                 />
-                <p className="mt-2 text-xs text-white/60">Uploaded files are accessible from the backend and can be shown on the display.</p>
+                <p className="mt-2 text-xs text-white/60">Uploaded files are accessible from the backend and rotate in the preview.</p>
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
@@ -134,8 +305,8 @@ function App() {
         <section id="display" className="py-16 bg-gradient-to-b from-[#0b1220] to-black">
           <div className="mx-auto max-w-6xl px-4">
             <h2 className="text-2xl font-semibold">Display Preview</h2>
-            <div className="mt-6 rounded-2xl border border-white/10 bg-black/40 p-6">
-              <p className="text-white/70">Soon: large clock, today’s salah times, jamaat times, announcements ticker, and uploaded image/PDF rotation. Colors tuned for visibility: emerald + sky accents on dark background.</p>
+            <div className="mt-6">
+              <DisplayBoard backend={backend} refreshKey={refreshKey} />
             </div>
           </div>
         </section>
