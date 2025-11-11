@@ -148,8 +148,9 @@ function DisplayBoard({ backend, refreshKey }) {
       } catch {}
       try {
         const as = await safeFetch(`${backend}/api/assets`)
+        const version = Date.now() // cache-busting per refresh
         const normalized = Array.isArray(as) ? as.map(x => ({
-          url: `${backend}${x.path}`,
+          url: `${backend}${x.path}${x.path?.includes('?') ? `&v=${version}` : `?v=${version}`}`,
           content_type: x.content_type || '',
         })) : []
         setAssets(normalized)
@@ -170,6 +171,8 @@ function DisplayBoard({ backend, refreshKey }) {
     isha: '19:30', isha_jamaat: '20:00',
   }
 
+  const timesToShow = times && typeof times === 'object' ? times : fallbackTimes
+
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
       <div className="grid gap-6 lg:grid-cols-2">
@@ -181,9 +184,9 @@ function DisplayBoard({ backend, refreshKey }) {
               <span className="text-xs text-white/50">Auto-refreshing</span>
             </div>
             <div className="mt-4">
-              <TimesGrid data={times || fallbackTimes} />
-              {(times?.sunrise || fallbackTimes.sunrise) && (
-                <div className="mt-3 text-sm text-white/60">Sunrise: <span className="text-amber-300">{times?.sunrise || fallbackTimes.sunrise}</span></div>
+              <TimesGrid data={timesToShow} />
+              {(timesToShow?.sunrise) && (
+                <div className="mt-3 text-sm text-white/60">Sunrise: <span className="text-amber-300">{timesToShow.sunrise}</span></div>
               )}
             </div>
           </div>
