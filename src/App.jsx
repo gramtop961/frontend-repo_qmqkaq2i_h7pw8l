@@ -101,11 +101,20 @@ function DisplayBoard({ backend, refreshKey }) {
     }
   }
 
+  const localYMD = () => {
+    const d = new Date()
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
+
   useEffect(() => {
     const load = async () => {
       try {
-        const t = await safeFetch(`${backend}/api/salah/today`)
-        setTimes(t)
+        // Fetch by the client local date to avoid timezone mismatches with the server
+        const t = await safeFetch(`${backend}/api/salah?d=${encodeURIComponent(localYMD())}`)
+        setTimes(t && typeof t === 'object' ? t : null)
       } catch {}
       try {
         const a = await safeFetch(`${backend}/api/announcements`)
