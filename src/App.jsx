@@ -49,7 +49,7 @@ function LiveClock() {
   )
 }
 
-function TimesGridJamaat({ data }) {
+function TimesGrid({ data }) {
   const rows = [
     { k: 'fajr', label: 'Fajr', jamaat: 'fajr_jamaat' },
     { k: 'dhuhr', label: 'Dhuhr', jamaat: 'dhuhr_jamaat' },
@@ -58,12 +58,14 @@ function TimesGridJamaat({ data }) {
     { k: 'isha', label: 'Isha', jamaat: 'isha_jamaat' },
   ]
   return (
-    <div className="grid grid-cols-2 gap-y-3 gap-x-4 items-center">
+    <div className="grid grid-cols-3 gap-y-3 gap-x-4 items-center">
       <div className="text-white/60 text-xl">Prayer</div>
+      <div className="text-white/60 text-xl">Start</div>
       <div className="text-white/60 text-xl">Jamaat</div>
       {rows.map(r => (
         <React.Fragment key={r.k}>
           <div className="py-2 font-semibold text-2xl">{r.label}</div>
+          <div className="py-2 text-sky-300 text-2xl md:text-3xl font-semibold tracking-tight">{data?.[r.k] || '--:--'}</div>
           <div className="py-2 text-emerald-300 text-3xl md:text-4xl font-bold tracking-tight">{data?.[r.jamaat] || '--:--'}</div>
         </React.Fragment>
       ))}
@@ -131,11 +133,11 @@ function DisplayBoard({ backend, refreshKey }) {
         <LiveClock />
         <div className="rounded-xl border border-white/10 bg-black/30 p-6">
           <div className="flex items-center justify-between">
-            <h3 className="text-2xl font-semibold">Jamaat Times</h3>
+            <h3 className="text-2xl font-semibold">Prayer Times</h3>
             <span className="text-xs text-white/50">Auto-refreshing</span>
           </div>
           <div className="mt-4">
-            <TimesGridJamaat data={timesToShow} />
+            <TimesGrid data={timesToShow} />
             {(timesToShow?.sunrise) && (
               <div className="mt-5 text-lg text-white/70">Sunrise: <span className="text-amber-300 font-semibold">{timesToShow.sunrise}</span></div>
             )}
@@ -219,7 +221,7 @@ function TimesForm({ backend, onSaved }) {
       ].map(row => (
         <div key={row.k} className="grid grid-cols-3 gap-3 items-end">
           <div className="text-white/80 text-sm">{row.label}</div>
-          <input placeholder="Adhan HH:MM" name={row.k} value={form[row.k]||''} onChange={handleChange} className="rounded-md bg-white/10 border border-white/20 px-3 py-2 text-white" />
+          <input placeholder="Start HH:MM" name={row.k} value={form[row.k]||''} onChange={handleChange} className="rounded-md bg-white/10 border border-white/20 px-3 py-2 text-white" />
           <input placeholder="Jamaat HH:MM" name={`${row.k}_jamaat`} value={form[`${row.k}_jamaat`]||''} onChange={handleChange} className="rounded-md bg-white/10 border border-white/20 px-3 py-2 text-white" />
         </div>
       ))}
