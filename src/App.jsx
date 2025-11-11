@@ -49,7 +49,7 @@ function LiveClock() {
   )
 }
 
-function TimesGrid({ data }) {
+function TimesGridJamaat({ data }) {
   const rows = [
     { k: 'fajr', label: 'Fajr', jamaat: 'fajr_jamaat' },
     { k: 'dhuhr', label: 'Dhuhr', jamaat: 'dhuhr_jamaat' },
@@ -58,15 +58,13 @@ function TimesGrid({ data }) {
     { k: 'isha', label: 'Isha', jamaat: 'isha_jamaat' },
   ]
   return (
-    <div className="grid grid-cols-3 gap-2 text-lg">
-      <div className="text-white/60">Prayer</div>
-      <div className="text-white/60">Adhan</div>
-      <div className="text-white/60">Jamaat</div>
+    <div className="grid grid-cols-2 gap-y-3 gap-x-4 items-center">
+      <div className="text-white/60 text-xl">Prayer</div>
+      <div className="text-white/60 text-xl">Jamaat</div>
       {rows.map(r => (
         <React.Fragment key={r.k}>
-          <div className="py-2 font-medium">{r.label}</div>
-          <div className="py-2 text-emerald-300">{data?.[r.k] || '--:--'}</div>
-          <div className="py-2 text-sky-300">{data?.[r.jamaat] || '--:--'}</div>
+          <div className="py-2 font-semibold text-2xl">{r.label}</div>
+          <div className="py-2 text-emerald-300 text-3xl md:text-4xl font-bold tracking-tight">{data?.[r.jamaat] || '--:--'}</div>
         </React.Fragment>
       ))}
     </div>
@@ -85,44 +83,9 @@ function Ticker({ items }) {
   )
 }
 
-function AssetCarousel({ items }) {
-  const [idx, setIdx] = useState(0)
-  const len = items?.length || 0
-  useEffect(() => {
-    if (!len) return
-    const t = setInterval(() => setIdx(i => (i + 1) % len), 6000)
-    return () => clearInterval(t)
-  }, [len])
-  if (!len) {
-    return (
-      <div className="aspect-video w-full rounded-xl border border-white/10 bg-gradient-to-br from-emerald-900/40 to-sky-900/40 grid place-items-center">
-        <div className="text-white/70 text-sm">Uploaded images and PDFs will rotate here</div>
-      </div>
-    )
-  }
-  const current = items[idx]
-  const url = current.url
-  const isImage = current.content_type?.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(url || '')
-  const isPDF = current.content_type === 'application/pdf' || /\.pdf$/i.test(url || '')
-  return (
-    <div className="aspect-video w-full overflow-hidden rounded-xl border border-white/10 bg-black/50">
-      {isImage ? (
-        <img src={url} alt="slide" className="h-full w-full object-contain" />
-      ) : isPDF ? (
-        <iframe src={url} title="PDF" className="h-full w-full" />
-      ) : (
-        <div className="h-full w-full grid place-items-center">
-          <a href={url} target="_blank" rel="noreferrer" className="text-sky-300 underline">Open Document</a>
-        </div>
-      )}
-    </div>
-  )
-}
-
 function DisplayBoard({ backend, refreshKey }) {
   const [times, setTimes] = useState(null)
   const [announcements, setAnnouncements] = useState([])
-  const [assets, setAssets] = useState([])
 
   const safeFetch = async (url) => {
     const controller = new AbortController()
@@ -146,17 +109,6 @@ function DisplayBoard({ backend, refreshKey }) {
         const a = await safeFetch(`${backend}/api/announcements`)
         setAnnouncements(Array.isArray(a) ? a.map(x => x.message).filter(Boolean) : [])
       } catch {}
-      try {
-        const as = await safeFetch(`${backend}/api/assets`)
-        const version = Date.now() // cache-busting per refresh
-        const normalized = Array.isArray(as) ? as.map(x => ({
-          url: `${backend}${x.path}${x.path?.includes('?') ? `&v=${version}` : `?v=${version}`}`,
-          content_type: x.content_type || '',
-        })) : []
-        setAssets(normalized)
-      } catch {
-        setAssets([])
-      }
     }
     load()
     const interval = setInterval(load, 60_000)
@@ -175,29 +127,21 @@ function DisplayBoard({ backend, refreshKey }) {
 
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="flex flex-col gap-6">
-          <LiveClock />
-          <div className="rounded-xl border border-white/10 bg-black/30 p-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xl font-semibold">Today’s Times</h3>
-              <span className="text-xs text-white/50">Auto-refreshing</span>
-            </div>
-            <div className="mt-4">
-              <TimesGrid data={timesToShow} />
-              {(timesToShow?.sunrise) && (
-                <div className="mt-3 text-sm text-white/60">Sunrise: <span className="text-amber-300">{timesToShow.sunrise}</span></div>
-              )}
-            </div>
+      <div className="flex flex-col gap-6">
+        <LiveClock />
+        <div className="rounded-xl border border-white/10 bg-black/30 p-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-2xl font-semibold">Jamaat Times</h3>
+            <span className="text-xs text-white/50">Auto-refreshing</span>
           </div>
-          <Ticker items={announcements} />
-        </div>
-        <div className="flex flex-col gap-6">
-          <AssetCarousel items={assets} />
-          <div className="rounded-xl border border-white/10 bg-gradient-to-br from-emerald-900/30 to-sky-900/30 p-4">
-            <p className="text-white/70 text-sm">Uploaded image/PDF rotation pulls from your backend uploads. If a PDF won’t preview, it uses a built-in inline viewer or shows an open link.</p>
+          <div className="mt-4">
+            <TimesGridJamaat data={timesToShow} />
+            {(timesToShow?.sunrise) && (
+              <div className="mt-5 text-lg text-white/70">Sunrise: <span className="text-amber-300 font-semibold">{timesToShow.sunrise}</span></div>
+            )}
           </div>
         </div>
+        <Ticker items={announcements} />
       </div>
     </div>
   )
@@ -318,7 +262,6 @@ function AnnouncementsManager({ backend, onChanged }) {
 
   const toISOorNull = (val) => {
     if (!val) return null
-    // treat input as local time, convert to ISO without timezone issues by creating Date
     const d = new Date(val)
     if (isNaN(d.getTime())) return null
     return d.toISOString()
@@ -413,7 +356,6 @@ function App() {
     const res = await fetch(`${backend}/api/upload`, { method: 'POST', body: form })
     if (!res.ok) throw new Error('Upload failed')
     const data = await res.json()
-    // Trigger immediate refresh of the display board after successful upload
     setRefreshKey(k => k + 1)
     return data
   }
@@ -491,7 +433,7 @@ function App() {
                     }
                   }}
                 />
-                <p className="mt-2 text-xs text-white/60">Uploaded files are accessible from the backend and rotate in the preview.</p>
+                <p className="mt-2 text-xs text-white/60">Uploaded files are accessible from the backend.</p>
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
