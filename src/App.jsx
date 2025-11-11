@@ -85,6 +85,26 @@ function Ticker({ items }) {
   )
 }
 
+const localYMD = () => {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+const getHashDate = () => {
+  try {
+    const hash = window.location.hash || ''
+    // expect formats like #display or #d=YYYY-MM-DD or #display&d=YYYY-MM-DD
+    const match = hash.match(/d=(\d{4}-\d{2}-\d{2})/)
+    if (match) return match[1]
+    return null
+  } catch {
+    return null
+  }
+}
+
 function DisplayBoard({ backend, refreshKey }) {
   const [times, setTimes] = useState(null)
   const [announcements, setAnnouncements] = useState([])
@@ -101,19 +121,12 @@ function DisplayBoard({ backend, refreshKey }) {
     }
   }
 
-  const localYMD = () => {
-    const d = new Date()
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    return `${y}-${m}-${day}`
-  }
+  const dateForFetch = getHashDate() || localYMD()
 
   useEffect(() => {
     const load = async () => {
       try {
-        // Fetch by the client local date to avoid timezone mismatches with the server
-        const t = await safeFetch(`${backend}/api/salah?d=${encodeURIComponent(localYMD())}`)
+        const t = await safeFetch(`${backend}/api/salah?d=${encodeURIComponent(dateForFetch)}`)
         setTimes(t && typeof t === 'object' ? t : null)
       } catch {}
       try {
@@ -124,7 +137,7 @@ function DisplayBoard({ backend, refreshKey }) {
     load()
     const interval = setInterval(load, 60_000)
     return () => clearInterval(interval)
-  }, [backend, refreshKey])
+  }, [backend, refreshKey, dateForFetch])
 
   const fallbackTimes = {
     fajr: '06:15', fajr_jamaat: '06:30', sunrise: '07:45',
@@ -143,7 +156,7 @@ function DisplayBoard({ backend, refreshKey }) {
         <div className="rounded-xl border border-white/10 bg-black/30 p-6">
           <div className="flex items-center justify-between">
             <h3 className="text-2xl font-semibold">Prayer Times</h3>
-            <span className="text-xs text-white/50">Auto-refreshing</span>
+            <span className="text-xs text-white/50">Auto-refreshing • Date: {dateForFetch}</span>
           </div>
           <div className="mt-4">
             <TimesGrid data={timesToShow} />
@@ -159,9 +172,9 @@ function DisplayBoard({ backend, refreshKey }) {
 }
 
 function TimesForm({ backend, onSaved }) {
-  const today = new Date().toISOString().slice(0, 10)
+  const initialDate = getHashDate() || localYMD()
   const [form, setForm] = useState({
-    date: today,
+    date: initialDate,
     fajr: '', fajr_jamaat: '',
     sunrise: '',
     dhuhr: '', dhuhr_jamaat: '',
