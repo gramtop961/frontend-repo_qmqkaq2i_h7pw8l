@@ -203,6 +203,206 @@ function DisplayBoard({ backend, refreshKey }) {
   )
 }
 
+function TimesForm({ backend, onSaved }) {
+  const today = new Date().toISOString().slice(0, 10)
+  const [form, setForm] = useState({
+    date: today,
+    fajr: '', fajr_jamaat: '',
+    sunrise: '',
+    dhuhr: '', dhuhr_jamaat: '',
+    asr: '', asr_jamaat: '',
+    maghrib: '', maghrib_jamaat: '',
+    isha: '', isha_jamaat: '',
+  })
+  const [loading, setLoading] = useState(false)
+
+  const handleChange = (e) => {
+    const { name, value } = e.target
+    setForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  const loadExisting = async (d) => {
+    try {
+      const res = await fetch(`${backend}/api/salah?d=${encodeURIComponent(d)}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data && data.date) {
+          setForm(prev => ({ ...prev, ...data, date: data.date }))
+        }
+      }
+    } catch {}
+  }
+
+  useEffect(() => {
+    loadExisting(form.date)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const submit = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const payload = { ...form, date: form.date }
+      const res = await fetch(`${backend}/api/salah`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) throw new Error('Failed')
+      onSaved?.()
+      alert('Saved times')
+    } catch (e) {
+      alert('Could not save times')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="mt-4 space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <label className="col-span-2 text-sm text-white/70">Date
+          <input type="date" name="date" value={form.date} onChange={(e)=>{handleChange(e); loadExisting(e.target.value)}} className="mt-1 w-full rounded-md bg-white/10 border border-white/20 px-3 py-2 text-white" />
+        </label>
+      </div>
+
+      {[
+        {k:'fajr', label:'Fajr'},
+        {k:'dhuhr', label:'Dhuhr'},
+        {k:'asr', label:'Asr'},
+        {k:'maghrib', label:'Maghrib'},
+        {k:'isha', label:'Isha'},
+      ].map(row => (
+        <div key={row.k} className="grid grid-cols-3 gap-3 items-end">
+          <div className="text-white/80 text-sm">{row.label}</div>
+          <input placeholder="Adhan HH:MM" name={row.k} value={form[row.k]||''} onChange={handleChange} className="rounded-md bg-white/10 border border-white/20 px-3 py-2 text-white" />
+          <input placeholder="Jamaat HH:MM" name={`${row.k}_jamaat`} value={form[`${row.k}_jamaat`]||''} onChange={handleChange} className="rounded-md bg-white/10 border border-white/20 px-3 py-2 text-white" />
+        </div>
+      ))}
+
+      <div className="grid grid-cols-1 gap-3">
+        <label className="text-sm text-white/70">Sunrise
+          <input placeholder="HH:MM" name="sunrise" value={form.sunrise||''} onChange={handleChange} className="mt-1 w-full rounded-md bg-white/10 border border-white/20 px-3 py-2 text-white" />
+        </label>
+      </div>
+
+      <div className="pt-2">
+        <button type="submit" disabled={loading} className="inline-flex items-center justify-center rounded-lg bg-emerald-500 px-4 py-2 text-white hover:bg-emerald-400 disabled:opacity-50">
+          {loading ? 'Saving…' : 'Save Today’s Times'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+function AnnouncementsManager({ backend, onChanged }) {
+  const [message, setMessage] = useState('')
+  const [priority, setPriority] = useState(3)
+  const [active, setActive] = useState(true)
+  const [startAt, setStartAt] = useState('')
+  const [endAt, setEndAt] = useState('')
+  const [list, setList] = useState([])
+  const [loading, setLoading] = useState(false)
+
+  const load = async () => {
+    try {
+      const res = await fetch(`${backend}/api/announcements`)
+      if (res.ok) {
+        const data = await res.json()
+        setList(Array.isArray(data) ? data : [])
+      }
+    } catch {}
+  }
+
+  useEffect(() => { load() }, [])
+
+  const toISOorNull = (val) => {
+    if (!val) return null
+    // treat input as local time, convert to ISO without timezone issues by creating Date
+    const d = new Date(val)
+    if (isNaN(d.getTime())) return null
+    return d.toISOString()
+  }
+
+  const submit = async (e) => {
+    e.preventDefault()
+    if (!message.trim()) { alert('Enter a message'); return }
+    setLoading(true)
+    try {
+      const payload = {
+        message: message.trim(),
+        priority: Number(priority) || 1,
+        active: !!active,
+        start_at: toISOorNull(startAt),
+        end_at: toISOorNull(endAt),
+      }
+      const res = await fetch(`${backend}/api/announcements`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) throw new Error('failed')
+      setMessage('')
+      setStartAt('')
+      setEndAt('')
+      setPriority(3)
+      setActive(true)
+      await load()
+      onChanged?.()
+      alert('Announcement added')
+    } catch (e) {
+      alert('Could not add announcement')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+      <div className="flex items-center gap-2">
+        <Bell className="h-5 w-5" />
+        <h3 className="font-medium">Announcements</h3>
+      </div>
+
+      <form onSubmit={submit} className="mt-4 space-y-3">
+        <label className="block text-sm text-white/70">Message
+          <input value={message} onChange={e=>setMessage(e.target.value)} placeholder="Type announcement" className="mt-1 w-full rounded-md bg-white/10 border border-white/20 px-3 py-2 text-white" />
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="text-sm text-white/70">Start at (optional)
+            <input type="datetime-local" value={startAt} onChange={e=>setStartAt(e.target.value)} className="mt-1 w-full rounded-md bg-white/10 border border-white/20 px-3 py-2 text-white" />
+          </label>
+          <label className="text-sm text-white/70">End at (optional)
+            <input type="datetime-local" value={endAt} onChange={e=>setEndAt(e.target.value)} className="mt-1 w-full rounded-md bg-white/10 border border-white/20 px-3 py-2 text-white" />
+          </label>
+        </div>
+        <div className="grid grid-cols-2 gap-3 items-center">
+          <label className="text-sm text-white/70">Priority
+            <input type="number" min={1} max={5} value={priority} onChange={e=>setPriority(e.target.value)} className="mt-1 w-full rounded-md bg-white/10 border border-white/20 px-3 py-2 text-white" />
+          </label>
+          <label className="flex items-center gap-2 text-sm text-white/80 mt-6">
+            <input type="checkbox" checked={active} onChange={e=>setActive(e.target.checked)} className="h-4 w-4" /> Active
+          </label>
+        </div>
+        <button type="submit" disabled={loading} className="inline-flex items-center justify-center rounded-lg bg-emerald-500 px-4 py-2 text-white hover:bg-emerald-400 disabled:opacity-50">{loading ? 'Saving…' : 'Add Announcement'}</button>
+      </form>
+
+      <div className="mt-6">
+        <div className="text-sm text-white/60 mb-2">Currently active</div>
+        <ul className="space-y-2">
+          {list.length === 0 && <li className="text-white/50 text-sm">No active announcements</li>}
+          {list.map((a, i) => (
+            <li key={i} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm flex items-center justify-between">
+              <span className="text-white/80">{a.message}</span>
+              <span className="text-white/40">P{a.priority||1}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  )
+}
+
 function App() {
   const backend = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
   const [refreshKey, setRefreshKey] = useState(0)
@@ -299,8 +499,13 @@ function App() {
                   <CalendarDays className="h-5 w-5" />
                   <h3 className="font-medium">Today’s Times</h3>
                 </div>
-                <p className="mt-2 text-sm text-white/70">The editable form for daily salah and jamaat will go here. It will save to the backend instantly.</p>
+                <p className="mt-2 text-sm text-white/70">Edit daily salah and jamaat times. Saving updates the display instantly.</p>
+                <TimesForm backend={backend} onSaved={() => setRefreshKey(k=>k+1)} />
               </div>
+            </div>
+
+            <div className="mt-6">
+              <AnnouncementsManager backend={backend} onChanged={() => setRefreshKey(k=>k+1)} />
             </div>
           </div>
         </section>
