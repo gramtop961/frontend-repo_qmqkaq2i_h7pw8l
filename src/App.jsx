@@ -105,7 +105,7 @@ const getHashDate = () => {
   }
 }
 
-function DisplayBoard({ backend, refreshKey }) {
+function DisplayBoard({ backend, refreshKey, dateOverride }) {
   const [times, setTimes] = useState(null)
   const [announcements, setAnnouncements] = useState([])
 
@@ -121,7 +121,7 @@ function DisplayBoard({ backend, refreshKey }) {
     }
   }
 
-  const dateForFetch = getHashDate() || localYMD()
+  const dateForFetch = dateOverride || localYMD()
 
   useEffect(() => {
     const load = async () => {
@@ -171,8 +171,8 @@ function DisplayBoard({ backend, refreshKey }) {
   )
 }
 
-function TimesForm({ backend, onSaved }) {
-  const initialDate = getHashDate() || localYMD()
+function TimesForm({ backend, onSaved, dateOverride }) {
+  const initialDate = dateOverride || localYMD()
   const [form, setForm] = useState({
     date: initialDate,
     fajr: '', fajr_jamaat: '',
@@ -196,6 +196,8 @@ function TimesForm({ backend, onSaved }) {
         const data = await res.json()
         if (data && data.date) {
           setForm(prev => ({ ...prev, ...data, date: data.date }))
+        } else {
+          setForm(prev => ({ ...prev, date: d }))
         }
       }
     } catch {}
@@ -205,6 +207,14 @@ function TimesForm({ backend, onSaved }) {
     loadExisting(form.date)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // React to hash date override changes
+  useEffect(() => {
+    if (!dateOverride) return
+    setForm(prev => ({ ...prev, date: dateOverride }))
+    loadExisting(dateOverride)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateOverride])
 
   const submit = async (e) => {
     e.preventDefault()
@@ -217,6 +227,12 @@ function TimesForm({ backend, onSaved }) {
         body: JSON.stringify(payload),
       })
       if (!res.ok) throw new Error('Failed')
+      // Keep hash in sync with the date being saved so display uses the same day
+      try {
+        const hash = window.location.hash || ''
+        const base = hash.includes('#display') ? '#display' : (hash.includes('#manage') ? '#manage' : '#')
+        window.location.hash = `${base}&d=${form.date}`
+      } catch {}
       onSaved?.()
       alert('Saved times')
     } catch (e) {
@@ -254,10 +270,11 @@ function TimesForm({ backend, onSaved }) {
         </label>
       </div>
 
-      <div className="pt-2">
+      <div className="flex items-center gap-3 pt-2 flex-wrap">
         <button type="submit" disabled={loading} className="inline-flex items-center justify-center rounded-lg bg-emerald-500 px-4 py-2 text-white hover:bg-emerald-400 disabled:opacity-50">
           {loading ? 'Saving…' : 'Save Today’s Times'}
         </button>
+        <a href={`#display&d=${form.date}`} className="inline-flex items-center justify-center rounded-lg bg-sky-600 px-4 py-2 text-white hover:bg-sky-500">Open Full‑Screen for this date</a>
       </div>
     </form>
   )
@@ -373,6 +390,14 @@ function AnnouncementsManager({ backend, onChanged }) {
 function App() {
   const backend = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
   const [refreshKey, setRefreshKey] = useState(0)
+  const [hashDate, setHashDate] = useState(getHashDate())
+
+  // Keep UI in sync with URL hash changes
+  useEffect(() => {
+    const onHash = () => setHashDate(getHashDate())
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
 
   const upload = async (file) => {
     const form = new FormData()
@@ -466,7 +491,7 @@ function App() {
                   <h3 className="font-medium">Today’s Times</h3>
                 </div>
                 <p className="mt-2 text-sm text-white/70">Edit daily salah and jamaat times. Saving updates the display instantly.</p>
-                <TimesForm backend={backend} onSaved={() => setRefreshKey(k=>k+1)} />
+                <TimesForm backend={backend} dateOverride={hashDate} onSaved={() => setRefreshKey(k=>k+1)} />
               </div>
             </div>
 
@@ -480,7 +505,7 @@ function App() {
           <div className="mx-auto max-w-6xl px-4">
             <h2 className="text-2xl font-semibold">Display Preview</h2>
             <div className="mt-6">
-              <DisplayBoard backend={backend} refreshKey={refreshKey} />
+              <DisplayBoard backend={backend} refreshKey={refreshKey} dateOverride={hashDate} />
             </div>
           </div>
         </section>
