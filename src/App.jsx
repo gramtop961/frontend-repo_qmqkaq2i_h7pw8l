@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Clock, Upload, CalendarDays, Bell, Monitor } from 'lucide-react'
+import AISyncButton from './components/AISyncButton'
 
 function Card({ title, children, icon: Icon, accent = 'emerald' }) {
   const color = useMemo(() => ({
@@ -275,6 +276,7 @@ function TimesForm({ backend, onSaved, dateOverride }) {
           {loading ? 'Saving…' : 'Save Today’s Times'}
         </button>
         <a href={`#display&d=${form.date}`} className="inline-flex items-center justify-center rounded-lg bg-sky-600 px-4 py-2 text-white hover:bg-sky-500">Open Full‑Screen for this date</a>
+        <AISyncButton backend={backend} currentDate={form.date} onSynced={() => window.location.hash = `#display&d=${form.date}`} />
       </div>
     </form>
   )
@@ -492,6 +494,9 @@ function App() {
                 </div>
                 <p className="mt-2 text-sm text-white/70">Edit daily salah and jamaat times. Saving updates the display instantly.</p>
                 <TimesForm backend={backend} dateOverride={hashDate} onSaved={() => setRefreshKey(k=>k+1)} />
+                <div className="mt-3">
+                  <AISyncButton backend={backend} currentDate={hashDate || localYMD()} onSynced={() => setRefreshKey(k=>k+1)} />
+                </div>
               </div>
             </div>
 
